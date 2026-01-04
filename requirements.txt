@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 streamlit
 yfinance
 pandas
@@ -6,12 +6,4 @@ numpy
 matplotlib
 scikit-learn
 google-generativeai
-=======
-streamlit
-yfinance
-pandas
-numpy
-matplotlib
-scikit-learn
-google-generativeai
->>>>>>> c35ee141ca658101a4cbfa0ec0e720df439d0ff3
+
