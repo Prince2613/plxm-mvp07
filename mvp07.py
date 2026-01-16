@@ -1,13 +1,4 @@
 
-
-# app_polxium_mao_gemini.py
-"""
-Polxium — MAO-001 (fixed)
-- Shows SVR predictions + small actual/predicted charts + portfolio rebalancer
-- Gemini explanation button appears ONLY if GEMINI_API_KEY is present
-- Robust error handling for missing data / environments
-"""
-
 import os
 import math
 from datetime import date
@@ -154,7 +145,7 @@ def format_pct_or_na(x, precision=2):
     try:
         if x is None:
             return "N/A"
-        xv = float(x)
+        xv = to_scalar_float(x)
         if math.isnan(xv):
             return "N/A"
         return f"{xv*100:.{precision}f}%"
@@ -366,28 +357,25 @@ if run:
         ax.legend(loc="lower right")
         st.pyplot(fig)
 
-        # ---------- Company summary (SAFE — no crashes if data missing) ----------
-st.markdown("### Company summary (numeric)")
+        # company summary - ALWAYS show summary (numeric)
+        st.markdown("### Company summary (numeric)")
+        close_vals = df_main["Close"].values
+        num_days = len(close_vals)
 
-close_vals = df_main["Close"].values
-num_days = len(close_vals)
+        last_close = close_vals[-1].item()
+        first_close = close_vals[0].item()
 
-if num_days == 0:
-    st.warning("No price data available for this period.")
-else:
-    first_close = float(close_vals[0])
-    last_close  = float(close_vals[-1])
+        total_return = (last_close / (first_close + 1e-12)) - 1.0
+        recent_30d_pct = None
 
-    total_return = (last_close / (first_close + 1e-12)) - 1.0
+        if num_days >= 2:
+            lookback_idx = max(0, num_days - 30)
+            recent_30d_pct = (last_close - close_vals[lookback_idx]) / (close_vals[lookback_idx] + 1e-12)
 
-    recent_30d_pct = None
-    if num_days > 30:
-        recent_30d_pct = (last_close - close_vals[-30]) / (close_vals[-30] + 1e-12)
-
-    st.write(f"- Date range: {start_date} → {end_date} ({num_days} trading days)")
-    st.write(f"- Start close: {first_close:.4f} → Last close: {last_close:.4f}")
-    st.write(f"- Total return over period: {total_return*100:.2f}%")
-    st.write(f"- Recent ~30-day change (approx): {format_pct_or_na(recent_30d_pct)}")
+        st.write(f"- Date range: {start_date} → {end_date} ({num_days} trading days)")
+        st.write(f"- Start close: {first_close:.4f}  →  Last close: {last_close:.4f}")
+        st.write(f"- Total return over period: {total_return*100:.2f}%")
+        st.write(f"- Recent ~30-day change (approx): {format_pct_or_na(recent_30d_pct)}")
 
 
     with col_side:
@@ -403,35 +391,7 @@ else:
         ax2.set_xticks([]); ax2.set_yticks([]); ax2.set_title("Predicted (test)", fontsize=10)
         st.pyplot(fig2)
 
-    # ---------------- Gemini explanation UI (only if key present) ----------------
-    st.markdown("---")
-    st.subheader("MAO-001 AI explanation (Gemini)")
-    gem_key = get_gemini_api_key()
-    if not gem_key:
-        st.info("AI explanation is disabled for this demo. Add a GEMINI_API_KEY to enable it.")
-    else:
-        st.caption("Press the button to generate a short natural-language explanation. Cached for 1 hour.")
-        payload = {
-            "ticker": ASSETS[asset_select],
-            "start": str(start_date),
-            "end": str(end_date),
-            "days": int(num_days),
-            "start_close": round(first_close, 6),
-            "last_close": round(last_close, 6),
-            "total_return_pct": round(total_return*100, 3),
-            "recent_30d_pct": (round(float(recent_30d_pct*100), 3) if recent_30d_pct is not None and not math.isnan(float(recent_30d_pct)) else None),
-            "pred_mean": (round(float(np.mean(preds)),4) if preds.size>0 and not math.isnan(np.mean(preds)) else None),
-            "pred_len": int(len(preds)),
-            "regimes": dict(pd.Series(regime_labels).value_counts().to_dict()) if regime_labels.size>0 else {},
-        }
-        payload_str = "\n".join([f"{k}: {v}" for k, v in payload.items()])
-        cache_key = f"gemini_{ASSETS[asset_select]}_{start_date}_{end_date}"
-        if st.button("Generate AI explanation (MAO-001)"):
-            with st.spinner("Requesting Gemini (cached 1h)..."):
-                explanation = cached_gemini_explain(cache_key, payload_str)
-                st.markdown("#### Gemini explanation")
-                st.write(explanation)
-
+   
     # ---------------- Portfolio analyzer ----------------
     st.write("---")
     st.subheader("Portfolio analyzer (MAO-001 driven rebalancing)")
@@ -513,11 +473,10 @@ else:
                 action = "HOLD"
         rec_lines.append(f"{asset}: {action} (expected {er_str}).")
     desc2 = " ".join(rec_lines)
-if run:
+
     st.markdown("**Portfolio — current situation**"); st.write(desc1)
     st.markdown("**Portfolio — recommended actions (why change/hold)**"); st.write(desc2)
     st.info("MAO-001 predictions are experimental and intended for pattern analysis. Not financial advice.")
 
 else:
     st.info("Adjust weights and press Run analysis.")
-
